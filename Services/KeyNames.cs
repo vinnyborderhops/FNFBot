@@ -1,4 +1,4 @@
-namespace FnfBot.Services;
+namespace FNFBot.Services;
 
 public static class KeyNames
 {

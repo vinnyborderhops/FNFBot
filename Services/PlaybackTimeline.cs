@@ -1,15 +1,18 @@
-using FnfBot.Interop;
-using FnfBot.Models;
+using FNFBot.Interop;
+using FNFBot.Models;
 
-namespace FnfBot.Services;
+namespace FNFBot.Services;
 
 public static class PlaybackTimeline
 {
     public const double TapDurationMs = 50;
+    public const double HoldReleaseGuardMs = 35;
 
     public static IReadOnlyList<ScheduledEventGroup> Build(
         IReadOnlyList<Note> notes,
-        IReadOnlyDictionary<int, IReadOnlyList<VirtualKey>> keyMap)
+        IReadOnlyDictionary<int, IReadOnlyList<VirtualKey>> keyMap,
+        double tapDurationMs = TapDurationMs,
+        double holdReleaseGuardMs = HoldReleaseGuardMs)
     {
         List<ScheduledKeyEvent> events = new(notes.Count * 2);
         Dictionary<int, double[]> keyAvailableAt = [];
@@ -19,9 +22,11 @@ public static class PlaybackTimeline
         foreach (Note note in notes)
         {
             double pressTime = note.Time;
-            double duration = note.Length.HasValue && note.Length.Value != 0
-                ? note.Length.Value
-                : TapDurationMs;
+            double noteLength = note.Length.GetValueOrDefault();
+            bool isHoldNote = noteLength != 0;
+            double duration = isHoldNote
+                ? noteLength + holdReleaseGuardMs
+                : tapDurationMs;
             VirtualKey key = SelectAvailableKey(
                 note.Direction,
                 pressTime,

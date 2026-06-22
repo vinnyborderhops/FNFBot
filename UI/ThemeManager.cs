@@ -1,9 +1,9 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using FnfBot.Services;
+using FNFBot.Services;
 using Microsoft.Win32;
 
-namespace FnfBot.UI;
+namespace FNFBot.UI;
 
 public static class ThemeManager
 {

@@ -1,7 +1,7 @@
-using FnfBot.Interop;
-using FnfBot.Models;
+using FNFBot.Interop;
+using FNFBot.Models;
 
-namespace FnfBot.Services;
+namespace FNFBot.Services;
 
 public sealed class ActiveKeyState
 {

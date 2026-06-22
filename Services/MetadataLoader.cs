@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace FnfBot.Services;
+namespace FNFBot.Services;
 
 public static class MetadataLoader
 {

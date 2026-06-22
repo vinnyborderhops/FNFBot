@@ -1,7 +1,7 @@
 using System.Text.Json;
-using FnfBot.Interop;
+using FNFBot.Interop;
 
-namespace FnfBot.Services;
+namespace FNFBot.Services;
 
 public static class UserSettings
 {
@@ -41,10 +41,17 @@ public static class UserSettings
                 settings.HitBiasMs.HasValue && double.IsFinite(settings.HitBiasMs.Value)
                     ? settings.HitBiasMs.Value
                     : defaultHitBiasMs,
+                ParseFiniteSetting(settings.TapDurationMs, defaults.TapDurationMs),
+                ParseFiniteSetting(settings.HoldReleaseGuardMs, defaults.HoldReleaseGuardMs),
+                ParseNavigationDelay(settings.MenuNavigationDelayMs, defaults.MenuNavigationDelayMs),
                 ParseHotKey(settings.Hotkeys?.Start, defaults.StartHotKey),
                 ParseHotKey(settings.Hotkeys?.Stop, defaults.StopHotKey),
-                ParseHotKey(settings.Hotkeys?.DecreaseDelay, defaults.DecreaseDelayHotKey),
-                ParseHotKey(settings.Hotkeys?.IncreaseDelay, defaults.IncreaseDelayHotKey),
+                ParseHotKey(
+                    settings.Hotkeys?.DecreaseHitBias ?? settings.Hotkeys?.DecreaseDelay,
+                    defaults.DecreaseHitBiasHotKey),
+                ParseHotKey(
+                    settings.Hotkeys?.IncreaseHitBias ?? settings.Hotkeys?.IncreaseDelay,
+                    defaults.IncreaseHitBiasHotKey),
                 new Dictionary<int, IReadOnlyList<VirtualKey>>
                 {
                     [0] = ParseInputKeys(settings.Inputs?.Left, defaults.InputKeys[0]),
@@ -73,7 +80,9 @@ public static class UserSettings
 
     public static void Save(BotSettings settings)
     {
-        if (!double.IsFinite(settings.HitBiasMs))
+        if (!double.IsFinite(settings.HitBiasMs) ||
+            !double.IsFinite(settings.TapDurationMs) ||
+            !double.IsFinite(settings.HoldReleaseGuardMs))
         {
             return;
         }
@@ -87,12 +96,15 @@ public static class UserSettings
                 new SettingsData
                 {
                     HitBiasMs = settings.HitBiasMs,
+                    TapDurationMs = settings.TapDurationMs,
+                    HoldReleaseGuardMs = settings.HoldReleaseGuardMs,
+                    MenuNavigationDelayMs = settings.MenuNavigationDelayMs,
                     Hotkeys = new HotkeyData
                     {
                         Start = KeyNames.ToSettingsName(settings.StartHotKey),
                         Stop = KeyNames.ToSettingsName(settings.StopHotKey),
-                        DecreaseDelay = KeyNames.ToSettingsName(settings.DecreaseDelayHotKey),
-                        IncreaseDelay = KeyNames.ToSettingsName(settings.IncreaseDelayHotKey)
+                        DecreaseHitBias = KeyNames.ToSettingsName(settings.DecreaseHitBiasHotKey),
+                        IncreaseHitBias = KeyNames.ToSettingsName(settings.IncreaseHitBiasHotKey)
                     },
                     Inputs = new InputData
                     {
@@ -118,6 +130,20 @@ public static class UserSettings
     private static Keys ParseHotKey(string? value, Keys fallback)
     {
         return TryParseKey(value, out Keys key) ? key : fallback;
+    }
+
+    private static double ParseFiniteSetting(double? value, double fallback)
+    {
+        return value.HasValue && double.IsFinite(value.Value)
+            ? value.Value
+            : fallback;
+    }
+
+    private static int ParseNavigationDelay(int? value, int fallback)
+    {
+        return value.HasValue
+            ? Math.Clamp(value.Value, 50, 1000)
+            : fallback;
     }
 
     private static IReadOnlyList<VirtualKey> ParseInputKeys(
@@ -174,6 +200,12 @@ public static class UserSettings
     {
         public double? HitBiasMs { get; init; }
 
+        public double? TapDurationMs { get; init; }
+
+        public double? HoldReleaseGuardMs { get; init; }
+
+        public int? MenuNavigationDelayMs { get; init; }
+
         public HotkeyData? Hotkeys { get; init; }
 
         public InputData? Inputs { get; init; }
@@ -187,6 +219,11 @@ public static class UserSettings
 
         public string? Stop { get; init; }
 
+        public string? DecreaseHitBias { get; init; }
+
+        public string? IncreaseHitBias { get; init; }
+
+        // Retained so existing settings files migrate without losing custom keys.
         public string? DecreaseDelay { get; init; }
 
         public string? IncreaseDelay { get; init; }
@@ -206,10 +243,13 @@ public static class UserSettings
 
 public sealed record BotSettings(
     double HitBiasMs,
+    double TapDurationMs,
+    double HoldReleaseGuardMs,
+    int MenuNavigationDelayMs,
     Keys StartHotKey,
     Keys StopHotKey,
-    Keys DecreaseDelayHotKey,
-    Keys IncreaseDelayHotKey,
+    Keys DecreaseHitBiasHotKey,
+    Keys IncreaseHitBiasHotKey,
     IReadOnlyDictionary<int, IReadOnlyList<VirtualKey>> InputKeys,
     ColorScheme ColorScheme)
 {
@@ -217,6 +257,9 @@ public sealed record BotSettings(
     {
         return new BotSettings(
             hitBiasMs,
+            PlaybackTimeline.TapDurationMs,
+            PlaybackTimeline.HoldReleaseGuardMs,
+            FNFBot.Core.RhythmBot.DefaultMenuNavigationDelayMs,
             Keys.F1,
             Keys.F4,
             Keys.F2,

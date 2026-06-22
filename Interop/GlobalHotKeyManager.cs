@@ -1,7 +1,7 @@
 using System.ComponentModel;
 using System.Runtime.InteropServices;
 
-namespace FnfBot.Interop;
+namespace FNFBot.Interop;
 
 public sealed class GlobalHotKeyManager : IDisposable
 {

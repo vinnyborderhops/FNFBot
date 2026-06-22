@@ -1,4 +1,4 @@
-namespace FnfBot.Interop;
+namespace FNFBot.Interop;
 
 public enum VirtualKey : ushort
 {

@@ -1,18 +1,19 @@
 using System.Globalization;
-using FnfBot.Core;
-using FnfBot.Interop;
-using FnfBot.Services;
+using FNFBot.Core;
+using FNFBot.Interop;
+using FNFBot.Services;
 
-namespace FnfBot.UI;
+namespace FNFBot.UI;
 
 public sealed class MainForm : Form
 {
     private const int WindowMessageHotKey = 0x0312;
     private const int StartHotKeyId = 1;
-    private const int DecreaseDelayHotKeyId = 2;
-    private const int IncreaseDelayHotKeyId = 3;
+    private const int DecreaseHitBiasHotKeyId = 2;
+    private const int IncreaseHitBiasHotKeyId = 3;
     private const int StopHotKeyId = 4;
     private const string NoSongsText = "No songs found";
+    private const string ModsHeaderText = "Mods";
 
     private readonly TextBox _folderTextBox = new();
     private readonly ListBox _songListBox = new();
@@ -79,11 +80,11 @@ public sealed class MainForm : Form
                 case StartHotKeyId:
                     BeginInvoke(new Action(StartBot));
                     break;
-                case DecreaseDelayHotKeyId:
-                    BeginInvoke(new Action(() => AdjustDelay(-0.5)));
+                case DecreaseHitBiasHotKeyId:
+                    BeginInvoke(new Action(() => AdjustHitBias(-0.1)));
                     break;
-                case IncreaseDelayHotKeyId:
-                    BeginInvoke(new Action(() => AdjustDelay(0.5)));
+                case IncreaseHitBiasHotKeyId:
+                    BeginInvoke(new Action(() => AdjustHitBias(0.1)));
                     break;
                 case StopHotKeyId:
                     BeginInvoke(new Action(StopBot));
@@ -215,7 +216,9 @@ public sealed class MainForm : Form
         }, 0, 0);
 
         _songListBox.Dock = DockStyle.Fill;
+        _songListBox.DrawMode = DrawMode.OwnerDrawFixed;
         _songListBox.IntegralHeight = false;
+        _songListBox.DrawItem += DrawSongListItem;
         _songListBox.SelectedIndexChanged += (_, _) => OnSongSelected();
         layout.Controls.Add(_songListBox, 0, 1);
         group.Controls.Add(layout);
@@ -418,7 +421,10 @@ public sealed class MainForm : Form
 
         _bot = new RhythmBot(3000, folder, _settings.InputKeys)
         {
-            HitBiasMs = _hitBiasMs
+            HitBiasMs = _hitBiasMs,
+            TapDurationMs = _settings.TapDurationMs,
+            HoldReleaseGuardMs = _settings.HoldReleaseGuardMs,
+            MenuNavigationDelayMs = _settings.MenuNavigationDelayMs
         };
         _bot.PlaybackFinished += OnPlaybackFinished;
         RefreshSongs();
@@ -433,29 +439,48 @@ public sealed class MainForm : Form
         }
 
         _songListBox.Items.Clear();
-        IReadOnlyList<string> songs = _bot.ListSongs();
+        IReadOnlyList<SongLocation> songs = _bot.ListSongLocations();
         if (songs.Count == 0)
         {
             _songListBox.Items.Add(NoSongsText);
             return;
         }
 
-        _songListBox.Items.AddRange(songs.Cast<object>().ToArray());
+        foreach (SongLocation song in songs.Where(static song => !song.IsMod))
+        {
+            _songListBox.Items.Add(new SongListItem(song));
+        }
+
+        SongLocation[] modSongs = songs.Where(static song => song.IsMod).ToArray();
+        if (modSongs.Length > 0)
+        {
+            _songListBox.Items.Add(new SongListHeader(ModsHeaderText));
+            foreach (SongLocation song in modSongs)
+            {
+                _songListBox.Items.Add(new SongListItem(song));
+            }
+        }
     }
 
     private void OnSongSelected()
     {
-        if (_songListBox.SelectedItem is not string songName || songName == NoSongsText)
+        if (_songListBox.SelectedItem is SongListHeader)
+        {
+            _songListBox.ClearSelected();
+            return;
+        }
+
+        if (_songListBox.SelectedItem is not SongListItem songItem)
         {
             return;
         }
 
-        _infoLabel.Text = $"Selected: {songName}";
+        SongLocation song = songItem.Location;
+        _infoLabel.Text = $"Selected: {song.DisplayName}";
         SetSemanticColor(_infoLabel, ThemeManager.SemanticText);
         SetEmptyStats();
 
-        string basePath = Path.Combine(_folderTextBox.Text, "assets", "data", "songs");
-        UpdateDifficulties(ChartLoader.AvailableDifficulties(songName, basePath));
+        UpdateDifficulties(ChartLoader.AvailableDifficulties(song.Name, song.BasePath));
     }
 
     private void UpdateDifficulties(IReadOnlyList<string> difficulties)
@@ -531,35 +556,73 @@ public sealed class MainForm : Form
             return;
         }
 
-        if (_songListBox.SelectedItem is not string songName)
+        if (_songListBox.SelectedItem is not SongListItem songItem)
         {
             MessageBox.Show(this, "Please select a song", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }
 
-        if (songName == NoSongsText)
-        {
-            MessageBox.Show(this, "No valid songs available", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            return;
-        }
-
+        SongLocation song = songItem.Location;
         string difficulty = _selectedDifficulty;
-        if (_bot.LoadSong(songName, difficulty))
+        if (_bot.LoadSong(song, difficulty))
         {
             int noteCount = _bot.CurrentChart!.Notes.Count;
-            _infoLabel.Text = $"Loaded: {songName} - {difficulty} ({noteCount} notes)";
+            _infoLabel.Text = $"Loaded: {song.DisplayName} - {difficulty} ({noteCount} notes)";
             SetSemanticColor(_infoLabel, ThemeManager.SemanticSuccess);
 
-            string basePath = Path.Combine(_folderTextBox.Text, "assets", "data", "songs");
             double? scrollSpeed = ChartLoader.GetScrollSpeed(_bot.CurrentChart, difficulty);
-            double? bpm = MetadataLoader.LoadBpm(songName, difficulty, basePath);
+            double? bpm = MetadataLoader.LoadBpm(song.Name, difficulty, song.BasePath);
             SetSongStats(scrollSpeed, bpm);
             SetStatus("Status: Song loaded, ready to play", Color.Green);
         }
         else
         {
-            MessageBox.Show(this, $"Failed to load {songName}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            MessageBox.Show(this, $"Failed to load {song.DisplayName}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             SetStatus("Status: Failed to load song", Color.Red);
+        }
+    }
+
+    private void DrawSongListItem(object? sender, DrawItemEventArgs eventArgs)
+    {
+        if (eventArgs.Index < 0)
+        {
+            return;
+        }
+
+        object item = _songListBox.Items[eventArgs.Index];
+        bool isHeader = item is SongListHeader;
+        Color backColor = isHeader
+            ? _songListBox.BackColor
+            : eventArgs.BackColor;
+        Color foreColor = isHeader
+            ? ThemeManager.GetSemanticColor(_settings.ColorScheme, ThemeManager.SemanticMuted)
+            : eventArgs.ForeColor;
+        Font font = isHeader
+            ? new Font(eventArgs.Font ?? _songListBox.Font, FontStyle.Bold)
+            : eventArgs.Font ?? _songListBox.Font;
+
+        using SolidBrush backgroundBrush = new(backColor);
+        eventArgs.Graphics.FillRectangle(backgroundBrush, eventArgs.Bounds);
+        TextRenderer.DrawText(
+            eventArgs.Graphics,
+            item.ToString(),
+            font,
+            new Rectangle(
+                eventArgs.Bounds.Left + 4,
+                eventArgs.Bounds.Top,
+                eventArgs.Bounds.Width - 8,
+                eventArgs.Bounds.Height),
+            foreColor,
+            TextFormatFlags.VerticalCenter | TextFormatFlags.Left);
+
+        if (!isHeader)
+        {
+            eventArgs.DrawFocusRectangle();
+        }
+
+        if (isHeader)
+        {
+            font.Dispose();
         }
     }
 
@@ -645,7 +708,10 @@ public sealed class MainForm : Form
 
     private void AdjustHitBias(double amountMs)
     {
-        _hitBiasMs += amountMs;
+        _hitBiasMs = Math.Clamp(
+            Math.Round(_hitBiasMs + amountMs, 1, MidpointRounding.AwayFromZero),
+            -1000,
+            1000);
         if (_bot is not null)
         {
             _bot.HitBiasMs = _hitBiasMs;
@@ -761,6 +827,9 @@ public sealed class MainForm : Form
         if (_bot is not null)
         {
             _bot.HitBiasMs = updated.HitBiasMs;
+            _bot.TapDurationMs = updated.TapDurationMs;
+            _bot.HoldReleaseGuardMs = updated.HoldReleaseGuardMs;
+            _bot.MenuNavigationDelayMs = updated.MenuNavigationDelayMs;
             _bot.InputKeys = updated.InputKeys;
         }
 
@@ -780,8 +849,8 @@ public sealed class MainForm : Form
         {
             hotKeys.Register(StartHotKeyId, settings.StartHotKey);
             hotKeys.Register(StopHotKeyId, settings.StopHotKey);
-            hotKeys.Register(DecreaseDelayHotKeyId, settings.DecreaseDelayHotKey);
-            hotKeys.Register(IncreaseDelayHotKeyId, settings.IncreaseDelayHotKey);
+            hotKeys.Register(DecreaseHitBiasHotKeyId, settings.DecreaseHitBiasHotKey);
+            hotKeys.Register(IncreaseHitBiasHotKeyId, settings.IncreaseHitBiasHotKey);
             _hotKeys = hotKeys;
             return true;
         }
@@ -823,5 +892,21 @@ public sealed class MainForm : Form
     {
         string sign = value >= 0 ? "+" : string.Empty;
         return $"{sign}{FormatDelay(value)} ms";
+    }
+
+    private sealed record SongListItem(SongLocation Location)
+    {
+        public override string ToString()
+        {
+            return Location.IsMod ? $"  {Location.ModName} / {Location.Name}" : Location.Name;
+        }
+    }
+
+    private sealed record SongListHeader(string Text)
+    {
+        public override string ToString()
+        {
+            return Text;
+        }
     }
 }

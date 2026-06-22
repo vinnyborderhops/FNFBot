@@ -1,8 +1,8 @@
 using System.Globalization;
 using System.Text.Json;
-using FnfBot.Models;
+using FNFBot.Models;
 
-namespace FnfBot.Services;
+namespace FNFBot.Services;
 
 public static class ChartLoader
 {

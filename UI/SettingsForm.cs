@@ -1,7 +1,7 @@
-using FnfBot.Interop;
-using FnfBot.Services;
+using FNFBot.Interop;
+using FNFBot.Services;
 
-namespace FnfBot.UI;
+namespace FNFBot.UI;
 
 public sealed class SettingsForm : Form
 {
@@ -9,10 +9,13 @@ public sealed class SettingsForm : Form
 
     private readonly ColorScheme _originalColorScheme;
     private readonly NumericUpDown _hitBiasInput = new();
+    private readonly NumericUpDown _tapDurationInput = new();
+    private readonly NumericUpDown _holdReleaseGuardInput = new();
+    private readonly NumericUpDown _menuNavigationDelayInput = new();
     private readonly KeyCaptureTextBox _startHotKey = new();
     private readonly KeyCaptureTextBox _stopHotKey = new();
-    private readonly KeyCaptureTextBox _decreaseDelayHotKey = new();
-    private readonly KeyCaptureTextBox _increaseDelayHotKey = new();
+    private readonly KeyCaptureTextBox _decreaseHitBiasHotKey = new();
+    private readonly KeyCaptureTextBox _increaseHitBiasHotKey = new();
     private readonly KeyCaptureTextBox[,] _laneKeys = new KeyCaptureTextBox[4, 2];
     private readonly ComboBox _colorScheme = new();
 
@@ -27,7 +30,7 @@ public sealed class SettingsForm : Form
         ShowInTaskbar = false;
         AutoScaleMode = AutoScaleMode.Font;
         Font = new Font("Segoe UI", 9F);
-        ClientSize = new Size(455, 505);
+        ClientSize = new Size(455, 535);
 
         BuildUi(settings);
         ThemeManager.Apply(this, settings.ColorScheme);
@@ -81,16 +84,27 @@ public sealed class SettingsForm : Form
     private Control BuildTimingGroup(BotSettings settings)
     {
         GroupBox group = CreateGroup("Timing");
-        FlowLayoutPanel row = CreateRow();
-        row.Controls.Add(CreateLabel("Hit bias (ms):"));
-        _hitBiasInput.DecimalPlaces = 1;
-        _hitBiasInput.Increment = 0.5M;
-        _hitBiasInput.Minimum = -1000;
-        _hitBiasInput.Maximum = 1000;
-        _hitBiasInput.Value = (decimal)Math.Clamp(settings.HitBiasMs, -1000, 1000);
-        _hitBiasInput.Width = 100;
-        row.Controls.Add(_hitBiasInput);
-        group.Controls.Add(row);
+        TableLayoutPanel table = new()
+        {
+            Dock = DockStyle.Fill,
+            AutoSize = true,
+            Padding = new Padding(7),
+            ColumnCount = 2,
+            RowCount = 4
+        };
+        table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        table.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+
+        ConfigureTimingInput(_hitBiasInput, -1000, 1000, settings.HitBiasMs);
+        ConfigureTimingInput(_tapDurationInput, 1, 1000, settings.TapDurationMs);
+        ConfigureTimingInput(_holdReleaseGuardInput, 0, 1000, settings.HoldReleaseGuardMs);
+        ConfigureTimingInput(_menuNavigationDelayInput, 50, 1000, settings.MenuNavigationDelayMs);
+
+        AddNumberRow(table, 0, "Hit bias (ms):", _hitBiasInput);
+        AddNumberRow(table, 1, "Tap duration (ms):", _tapDurationInput);
+        AddNumberRow(table, 2, "Hold release guard (ms):", _holdReleaseGuardInput);
+        AddNumberRow(table, 3, "Menu navigation delay (ms):", _menuNavigationDelayInput);
+        group.Controls.Add(table);
         return group;
     }
 
@@ -100,8 +114,18 @@ public sealed class SettingsForm : Form
         TableLayoutPanel table = CreateKeyTable(4);
         AddKeyRow(table, 0, "Start:", _startHotKey, settings.StartHotKey);
         AddKeyRow(table, 1, "Stop:", _stopHotKey, settings.StopHotKey);
-        AddKeyRow(table, 2, "Decrease delay:", _decreaseDelayHotKey, settings.DecreaseDelayHotKey);
-        AddKeyRow(table, 3, "Increase delay:", _increaseDelayHotKey, settings.IncreaseDelayHotKey);
+        AddKeyRow(
+            table,
+            2,
+            "Decrease hit bias:",
+            _decreaseHitBiasHotKey,
+            settings.DecreaseHitBiasHotKey);
+        AddKeyRow(
+            table,
+            3,
+            "Increase hit bias:",
+            _increaseHitBiasHotKey,
+            settings.IncreaseHitBiasHotKey);
         group.Controls.Add(table);
         return group;
     }
@@ -226,8 +250,8 @@ public sealed class SettingsForm : Form
         [
             _startHotKey.SelectedKey,
             _stopHotKey.SelectedKey,
-            _decreaseDelayHotKey.SelectedKey,
-            _increaseDelayHotKey.SelectedKey
+            _decreaseHitBiasHotKey.SelectedKey,
+            _increaseHitBiasHotKey.SelectedKey
         ];
         if (hotkeys.Any(static key => key == Keys.None) || hotkeys.Distinct().Count() != hotkeys.Length)
         {
@@ -274,6 +298,9 @@ public sealed class SettingsForm : Form
         Enum.TryParse(_colorScheme.SelectedItem?.ToString(), out ColorScheme colorScheme);
         Result = new BotSettings(
             (double)_hitBiasInput.Value,
+            (double)_tapDurationInput.Value,
+            (double)_holdReleaseGuardInput.Value,
+            (int)_menuNavigationDelayInput.Value,
             hotkeys[0],
             hotkeys[1],
             hotkeys[2],
@@ -331,6 +358,31 @@ public sealed class SettingsForm : Form
             Anchor = AnchorStyles.Left,
             Margin = new Padding(3, 7, 3, 3)
         };
+    }
+
+    private static void ConfigureTimingInput(
+        NumericUpDown input,
+        decimal minimum,
+        decimal maximum,
+        double value)
+    {
+        input.DecimalPlaces = 1;
+        input.Increment = 0.5M;
+        input.Minimum = minimum;
+        input.Maximum = maximum;
+        input.Value = (decimal)Math.Clamp(value, (double)minimum, (double)maximum);
+        input.Width = 100;
+        input.Anchor = AnchorStyles.Left;
+    }
+
+    private static void AddNumberRow(
+        TableLayoutPanel table,
+        int row,
+        string label,
+        NumericUpDown input)
+    {
+        table.Controls.Add(CreateLabel(label), 0, row);
+        table.Controls.Add(input, 1, row);
     }
 
     private static void AddKeyRow(

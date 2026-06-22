@@ -1,6 +1,6 @@
-using FnfBot.Services;
+using FNFBot.Services;
 
-namespace FnfBot.UI;
+namespace FNFBot.UI;
 
 public sealed class KeyCaptureTextBox : TextBox
 {

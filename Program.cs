@@ -1,6 +1,6 @@
-using FnfBot.UI;
+using FNFBot.UI;
 
-namespace FnfBot;
+namespace FNFBot;
 
 internal static class Program
 {

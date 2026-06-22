@@ -1,7 +1,7 @@
 using System.Runtime.InteropServices;
-using FnfBot.Interop;
+using FNFBot.Interop;
 
-namespace FnfBot.Services;
+namespace FNFBot.Services;
 
 public static class InputSimulator
 {

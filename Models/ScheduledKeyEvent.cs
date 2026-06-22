@@ -1,6 +1,6 @@
-using FnfBot.Interop;
+using FNFBot.Interop;
 
-namespace FnfBot.Models;
+namespace FNFBot.Models;
 
 public enum ScheduledKeyEventType
 {

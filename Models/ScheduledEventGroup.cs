@@ -1,4 +1,4 @@
-namespace FnfBot.Models;
+namespace FNFBot.Models;
 
 public sealed class ScheduledEventGroup
 {
